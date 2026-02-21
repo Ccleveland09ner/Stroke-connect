@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle, Info, Clock, X } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
 import Button from '../components/ui/Button';
+import Alert from '../components/ui/Alert';
 import { useNotificationStore, Notification } from '../stores/notificationStore';
 import { formatDateTime } from '../utils/formatUtils';
 
@@ -11,7 +12,10 @@ const NotificationsPage: React.FC = () => {
     fetchNotifications, 
     markAsRead, 
     markAllAsRead,
-    loading 
+    loading,
+    isMutating,
+    mutatingIds,
+    error
   } = useNotificationStore();
   
   const [filter, setFilter] = useState<string>('all');
@@ -40,11 +44,16 @@ const NotificationsPage: React.FC = () => {
   
   return (
     <div className="space-y-6 animate-fade-in">
+      {error && (
+        <Alert variant="error" title="Error">
+          {error}
+        </Alert>
+      )}
       <div className="flex flex-wrap items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
         
         {notifications.some(n => !n.read) && (
-          <Button variant="outline" onClick={() => markAllAsRead()}>
+          <Button variant="outline" onClick={() => markAllAsRead()} disabled={isMutating} isLoading={isMutating}>
             Mark All as Read
           </Button>
         )}
@@ -126,6 +135,7 @@ const NotificationsPage: React.FC = () => {
                   key={notification.id}
                   notification={notification}
                   onMarkAsRead={() => markAsRead(notification.id)}
+                  isMarking={mutatingIds.includes(notification.id)}
                 />
               ))}
             </ul>
@@ -139,9 +149,10 @@ const NotificationsPage: React.FC = () => {
 interface NotificationItemProps {
   notification: Notification;
   onMarkAsRead: () => void;
+  isMarking?: boolean;
 }
 
-const NotificationItem: React.FC<NotificationItemProps> = ({ notification, onMarkAsRead }) => {
+const NotificationItem: React.FC<NotificationItemProps> = ({ notification, onMarkAsRead, isMarking = false }) => {
   const { id, type, message, patientName, timestamp, read } = notification;
   
   const getIcon = () => {
@@ -196,7 +207,8 @@ const NotificationItem: React.FC<NotificationItemProps> = ({ notification, onMar
             {!read && (
               <button
                 onClick={onMarkAsRead}
-                className="ml-4 bg-white rounded-full p-1 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                disabled={isMarking}
+                className="ml-4 bg-white rounded-full p-1 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span className="sr-only">Mark as read</span>
                 <X className="h-5 w-5" />

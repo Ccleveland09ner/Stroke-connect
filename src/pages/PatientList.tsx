@@ -5,12 +5,13 @@ import { Card, CardContent, CardHeader } from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import AddPatientForm from '../components/AddPatientForm';
+import Alert from '../components/ui/Alert';
 import { usePatientStore, Patient } from '../stores/patientStore';
 import { useAuthStore } from '../stores/authStore';
 import { formatNIHSSScore, formatStatus } from '../utils/formatUtils';
 
 const PatientList: React.FC = () => {
-  const { patients, fetchPatients, loading, addPatient } = usePatientStore();
+  const { patients, fetchPatients, loading, addPatient, isMutating, error } = usePatientStore();
   const { role } = useAuthStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<string>('all');
@@ -100,10 +101,15 @@ const PatientList: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {error && (
+        <Alert variant="error" title="Error">
+          {error}
+        </Alert>
+      )}
       <div className="flex flex-wrap items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Patients</h1>
         {role === 'technician' && (
-          <Button onClick={() => setShowAddForm(true)}>
+          <Button onClick={() => setShowAddForm(true)} disabled={isMutating}>
             <PlusCircle className="h-4 w-4 mr-2" />
             Add New Patient
           </Button>
@@ -238,6 +244,7 @@ const PatientList: React.FC = () => {
             <AddPatientForm
               onSubmit={handleAddPatient}
               onClose={() => setShowAddForm(false)}
+              isLoading={isMutating}
             />
           </div>
         </div>

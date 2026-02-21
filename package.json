@@ -8,7 +8,9 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "server": "python backend/app.py"
+    "server": "python backend/run.py",
+    "build:deploy": "vite build && node scripts/copy-frontend.cjs",
+    "heroku-postbuild": "npm run build:deploy"
   },
   "dependencies": {
     "@headlessui/react": "^1.7.18",

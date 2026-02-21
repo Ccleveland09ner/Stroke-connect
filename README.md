@@ -81,6 +81,58 @@ npm run dev
 
 3. Access the application at `http://localhost:5173`
 
+### Running with Docker
+
+1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop)
+2. From the project root, run:
+```bash
+docker-compose up --build
+```
+3. Open http://localhost:80
+
+### Development (no Docker)
+
+1. Backend: `npm run server` (or `python backend/run.py`)
+2. Frontend: `npm run dev`
+3. Open http://localhost:5173
+
+## Deployment
+
+### Vercel (recommended)
+
+The application is configured for Vercel deployment. The Vite frontend is built and served as static files; the Flask API runs as a serverless function.
+
+1. Connect your repository to [Vercel](https://vercel.com)
+2. Set environment variables in Project Settings:
+   - `FLASK_ENV` = `production`
+   - `SECRET_KEY` = a strong random key (e.g. `openssl rand -hex 32`)
+   - `DB_PATH` = `/tmp/stroke_app.db` (Vercel's only writable directory)
+3. Deploy. Vercel will run `npm run build` and deploy the API from `api/index.py`.
+
+**Database note:** On Vercel, the filesystem is ephemeral. SQLite data in `/tmp` is lost between cold starts. For persistent data, use an external database (e.g. Vercel Postgres, Turso, or Supabase).
+
+### Other PaaS (Heroku, Railway, Render)
+
+The application can also be deployed as a monolithic app (Flask serves both frontend and API).
+
+**Build for deployment:**
+```bash
+npm run build:deploy
+```
+
+**Required environment variables:**
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| FLASK_ENV | Yes | Set to `production` |
+| SECRET_KEY | Yes | Strong random key |
+| PORT | No | PaaS sets automatically |
+| DB_PATH | No | Override SQLite location |
+
+**Heroku:** Add Node.js + Python buildpacks; set `FLASK_ENV`, `SECRET_KEY`; `heroku-postbuild` runs `npm run build:deploy`.
+
+**Railway / Render (Docker):** Use the root `Dockerfile`; set `FLASK_ENV`, `SECRET_KEY`.
+
 ### Default Login Credentials
 
 For testing purposes, use these credentials:
@@ -100,18 +152,26 @@ For testing purposes, use these credentials:
 ## Project Structure
 
 ```
-medical-stroke-application/
+Stroke-connect/
 ├── backend/
-│   ├── app.py              # Flask backend server
-│   ├── requirements.txt    # Python dependencies
-│   └── db/                 # SQLite database
+│   ├── app/               # Modular Flask application
+│   │   ├── api/           # Blueprint routes
+│   │   ├── services/      # Business logic
+│   │   └── utils/         # Helpers (auth, casing)
+│   ├── run.py             # Entry point
+│   ├── requirements.txt   # Python dependencies
+│   └── db/                # SQLite database
 ├── src/
-│   ├── components/         # Reusable React components
+│   ├── api/               # API client layer
+│   ├── components/        # Reusable React components
 │   ├── pages/             # Page components
 │   ├── stores/            # Zustand state management
+│   ├── types/             # TypeScript types
 │   └── utils/             # Utility functions
-├── public/                # Static assets
-└── package.json          # Node.js dependencies
+├── docker/                # Docker configs
+├── docker-compose.yml     # Container orchestration
+├── public/                 # Static assets
+└── package.json           # Node.js dependencies
 ```
 
 ## Key Features Implementation

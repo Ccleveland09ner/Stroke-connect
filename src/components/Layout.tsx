@@ -16,6 +16,17 @@ const Layout: React.FC = () => {
     }
   }, [fetchNotifications, role]);
 
+  useEffect(() => {
+    if (role !== 'neurologist' && role !== 'technician') return;
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchNotifications();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [fetchNotifications, role]);
+
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return (

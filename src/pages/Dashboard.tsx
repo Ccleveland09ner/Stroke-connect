@@ -18,7 +18,7 @@ import { useNotificationStore, Notification } from '../stores/notificationStore'
 
 const Dashboard: React.FC = () => {
   const { role, user } = useAuthStore();
-  const { patients, fetchPatients } = usePatientStore();
+  const { patients, myPatient, fetchPatients, fetchMyRecord } = usePatientStore();
   const { appointments, fetchAppointments } = useAppointmentStore();
   const { notifications, fetchNotifications } = useNotificationStore();
   const [isLoading, setIsLoading] = useState(true);
@@ -32,12 +32,14 @@ const Dashboard: React.FC = () => {
           fetchNotifications(),
           role === 'neurologist' ? fetchAppointments() : Promise.resolve()
         ]);
+      } else if (role === 'patient' && user?.name) {
+        await fetchMyRecord(user.name);
       }
       setIsLoading(false);
     };
 
     fetchData();
-  }, [fetchPatients, fetchNotifications, fetchAppointments, role]);
+  }, [fetchPatients, fetchMyRecord, fetchNotifications, fetchAppointments, role, user?.name]);
 
   if (isLoading) {
     return (
@@ -238,24 +240,23 @@ const Dashboard: React.FC = () => {
               <h2 className="text-lg font-medium text-gray-900">Your Medical Status</h2>
             </CardHeader>
             <CardContent>
-              {/* For demo, assume the patient is the one with ID 4 */}
-              {patients.find(p => p.id === 4) ? (
+              {myPatient ? (
                 <div className="divide-y divide-gray-200">
                   <div className="py-4 flex justify-between">
                     <dt className="text-sm font-medium text-gray-500">Status</dt>
-                    <dd className="text-sm text-gray-900 capitalize">Diagnosed</dd>
+                    <dd className="text-sm text-gray-900 capitalize">{myPatient.status?.replace('-', ' ')}</dd>
                   </div>
                   <div className="py-4 flex justify-between">
                     <dt className="text-sm font-medium text-gray-500">Date of Admission</dt>
-                    <dd className="text-sm text-gray-900">5 days ago</dd>
+                    <dd className="text-sm text-gray-900">{myPatient.dateOfAdmission}</dd>
                   </div>
                   <div className="py-4 flex justify-between">
                     <dt className="text-sm font-medium text-gray-500">NIHSS Score</dt>
-                    <dd className="text-sm text-gray-900">10 - Moderate Stroke</dd>
+                    <dd className="text-sm text-gray-900">{myPatient.nihssScore} - {myPatient.nihssScore <= 4 ? 'Minor' : myPatient.nihssScore <= 15 ? 'Moderate' : 'Severe'} Stroke</dd>
                   </div>
                   <div className="py-4 flex justify-between">
                     <dt className="text-sm font-medium text-gray-500">Assigned Neurologist</dt>
-                    <dd className="text-sm text-gray-900">Dr. Sarah Johnson</dd>
+                    <dd className="text-sm text-gray-900">{myPatient.neurologistName ?? '—'}</dd>
                   </div>
                   <div className="pt-4">
                     <Link to="/my-record">

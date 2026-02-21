@@ -1,0 +1,10 @@
+node_modules/
+__pycache__/
+backend/db/*.db
+.git/
+dist/
+.env
+.env.*
+*.log
+*.md
+.cursor/

@@ -12,9 +12,10 @@ interface AddPatientFormProps {
     chiefComplaint: string;
   }) => void;
   onClose: () => void;
+  isLoading?: boolean;
 }
 
-const AddPatientForm: React.FC<AddPatientFormProps> = ({ onSubmit, onClose }) => {
+const AddPatientForm: React.FC<AddPatientFormProps> = ({ onSubmit, onClose, isLoading = false }) => {
   const [formData, setFormData] = useState({
     name: '',
     age: '',
@@ -137,7 +138,7 @@ const AddPatientForm: React.FC<AddPatientFormProps> = ({ onSubmit, onClose }) =>
           <Button type="button" variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit">
+          <Button type="submit" isLoading={isLoading} disabled={isLoading}>
             Add Patient
           </Button>
         </CardFooter>

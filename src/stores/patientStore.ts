@@ -1,276 +1,189 @@
 import { create } from 'zustand';
-import { format } from 'date-fns';
-
-export interface Patient {
-  id: number;
-  name: string;
-  age: number;
-  gender: 'male' | 'female' | 'other';
-  medicalRecordNumber: string;
-  dateOfAdmission: string;
-  chiefComplaint: string;
-  vitalSigns: {
-    bloodPressure: string;
-    heartRate: number;
-    oxygenSaturation: number;
-  };
-  nihssScore: number;
-  status: 'waiting' | 'diagnosed' | 'treatment-pending' | 'treatment-approved' | 'treatment-denied' | 'discharged';
-  imagingResults: string[];
-  assignedNeurologist?: number;
-  diagnosis?: string;
-  treatment?: string;
-  tpaEligible?: boolean;
-  tpaDecision?: 'approved' | 'denied';
-  tpaDecisionReason?: string;
-  notes: string;
-}
+import * as patientsApi from '../api/patients';
+import type { Patient } from '../types/patient';
 
 interface PatientState {
   patients: Patient[];
+  myPatient: Patient | null;
   loading: boolean;
+  isMutating: boolean;
   error: string | null;
   fetchPatients: () => Promise<void>;
+  fetchMyRecord: (userName: string) => Promise<void>;
   getPatientById: (id: number) => Patient | undefined;
   updatePatient: (id: number, data: Partial<Patient>) => Promise<boolean>;
   addPatient: (patient: Omit<Patient, 'id'>) => Promise<boolean>;
   updateDiagnosisAndTreatment: (
-    id: number, 
-    diagnosis: string, 
+    id: number,
+    diagnosis: string,
     treatment: string,
     tpaEligible: boolean
   ) => Promise<boolean>;
   makeTpaDecision: (
-    id: number, 
+    id: number,
     decision: 'approved' | 'denied',
     reason: string
   ) => Promise<boolean>;
 }
 
-// Mock data for demonstration
-const mockPatients: Patient[] = [
-  {
-    id: 1,
-    name: 'John Doe',
-    age: 67,
-    gender: 'male',
-    medicalRecordNumber: 'MRN12345',
-    dateOfAdmission: format(new Date(), 'yyyy-MM-dd'),
-    chiefComplaint: 'Sudden left-sided weakness and facial droop',
-    vitalSigns: {
-      bloodPressure: '160/90',
-      heartRate: 92,
-      oxygenSaturation: 96,
-    },
-    nihssScore: 14,
-    status: 'waiting',
-    imagingResults: ['CT scan shows no hemorrhage', 'CTA shows M1 occlusion'],
-    assignedNeurologist: 1,
-    notes: 'Patient arrived 45 minutes after symptom onset.'
-  },
-  {
-    id: 2,
-    name: 'Jane Smith',
-    age: 73,
-    gender: 'female',
-    medicalRecordNumber: 'MRN12346',
-    dateOfAdmission: format(new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'),
-    chiefComplaint: 'Slurred speech and right arm weakness',
-    vitalSigns: {
-      bloodPressure: '145/85',
-      heartRate: 88,
-      oxygenSaturation: 98,
-    },
-    nihssScore: 8,
-    status: 'diagnosed',
-    diagnosis: 'Acute ischemic stroke',
-    treatment: 'Consider tPA administration',
-    tpaEligible: true,
-    imagingResults: ['CT scan negative for hemorrhage', 'MRI shows acute infarct in left MCA territory'],
-    assignedNeurologist: 1,
-    notes: 'Last known well 3 hours prior to arrival.'
-  },
-  {
-    id: 3,
-    name: 'Robert Johnson',
-    age: 58,
-    gender: 'male',
-    medicalRecordNumber: 'MRN12347',
-    dateOfAdmission: format(new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'),
-    chiefComplaint: 'Dizziness, nausea, and difficulty walking',
-    vitalSigns: {
-      bloodPressure: '170/95',
-      heartRate: 78,
-      oxygenSaturation: 97,
-    },
-    nihssScore: 5,
-    status: 'treatment-approved',
-    diagnosis: 'Acute ischemic stroke',
-    treatment: 'Administer tPA',
-    tpaEligible: true,
-    tpaDecision: 'approved',
-    tpaDecisionReason: 'Patient meets all criteria for tPA administration',
-    imagingResults: ['CT scan negative', 'MRI confirms right cerebellar infarct'],
-    assignedNeurologist: 1,
-    notes: 'Patient has history of hypertension and diabetes.'
-  },
-  {
-    id: 4,
-    name: 'Jamie Smith',
-    age: 52,
-    gender: 'female',
-    medicalRecordNumber: 'MRN12348',
-    dateOfAdmission: format(new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'),
-    chiefComplaint: 'Sudden severe headache and vomiting',
-    vitalSigns: {
-      bloodPressure: '180/100',
-      heartRate: 102,
-      oxygenSaturation: 95,
-    },
-    nihssScore: 10,
-    status: 'treatment-denied',
-    diagnosis: 'Hemorrhagic stroke',
-    treatment: 'Blood pressure control and supportive care',
-    tpaEligible: false,
-    tpaDecision: 'denied',
-    tpaDecisionReason: 'Hemorrhagic stroke on imaging',
-    imagingResults: ['CT shows subarachnoid hemorrhage', 'CTA confirms right MCA aneurysm'],
-    assignedNeurologist: 1,
-    notes: 'Patient transferred for neurosurgical evaluation.'
-  }
-];
+function normalizePatient(p: Patient): Patient {
+  return {
+    ...p,
+    vitalSigns: p.vitalSigns || { bloodPressure: '', heartRate: 0, oxygenSaturation: 0 },
+    imagingResults: p.imagingResults || [],
+    notes: p.notes ?? '',
+  };
+}
 
 export const usePatientStore = create<PatientState>((set, get) => ({
   patients: [],
+  myPatient: null,
   loading: false,
+  isMutating: false,
   error: null,
-  
+
   fetchPatients: async () => {
     set({ loading: true, error: null });
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-      set({ patients: mockPatients, loading: false });
-    } catch (error) {
-      set({ 
-        error: error instanceof Error ? error.message : 'Failed to fetch patients', 
-        loading: false 
+      const res = await patientsApi.getPatients();
+      if (res.success && res.patients) {
+        set({
+          patients: res.patients.map(normalizePatient),
+          loading: false,
+        });
+      } else {
+        set({ loading: false });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch patients';
+      console.error('[patientStore] fetchPatients failed:', err);
+      set({ error: message, loading: false });
+    }
+  },
+
+  fetchMyRecord: async (userName) => {
+    set({ loading: true, error: null });
+    try {
+      const res = await patientsApi.getMyRecord(userName);
+      if (res.success && res.patient) {
+        set({
+          myPatient: normalizePatient(res.patient),
+          loading: false,
+        });
+      } else {
+        set({ myPatient: null, loading: false });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch record';
+      console.error('[patientStore] fetchMyRecord failed:', err);
+      set({
+        error: message,
+        myPatient: null,
+        loading: false,
       });
     }
   },
-  
+
   getPatientById: (id) => {
-    return get().patients.find(patient => patient.id === id);
+    const fromList = get().patients.find((p) => p.id === id);
+    if (fromList) return fromList;
+    const my = get().myPatient;
+    return my && my.id === id ? my : undefined;
   },
-  
+
   updatePatient: async (id, data) => {
-    set({ loading: true, error: null });
+    set({ isMutating: true, error: null });
+    const prevPatients = get().patients;
+    const prevMyPatient = get().myPatient;
+
+    const applyOptimistic = () => {
+      const updated = prevPatients.map((p) =>
+        p.id === id ? { ...p, ...data } : p
+      );
+      set({ patients: updated });
+      if (prevMyPatient?.id === id) {
+        set({ myPatient: { ...prevMyPatient, ...data } });
+      }
+    };
+
+    applyOptimistic();
+
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      const updatedPatients = get().patients.map(patient => {
-        if (patient.id === id) {
-          return { ...patient, ...data };
+      const res = await patientsApi.updatePatient(id, data);
+      if (res.success) {
+        await get().fetchPatients();
+        if (prevMyPatient?.id === id) {
+          const userName = prevMyPatient.name;
+          await get().fetchMyRecord(userName);
         }
-        return patient;
-      });
-      
-      set({ patients: updatedPatients, loading: false });
-      return true;
-    } catch (error) {
-      set({ 
-        error: error instanceof Error ? error.message : 'Failed to update patient', 
-        loading: false 
+        set({ isMutating: false });
+        return true;
+      }
+      set({ patients: prevPatients, myPatient: prevMyPatient, isMutating: false });
+      return false;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to update patient';
+      console.error('[patientStore] updatePatient failed:', err);
+      set({
+        patients: prevPatients,
+        myPatient: prevMyPatient,
+        error: message,
+        isMutating: false,
       });
       return false;
     }
   },
-  
+
   addPatient: async (patientData) => {
-    set({ loading: true, error: null });
+    set({ isMutating: true, error: null });
+    const tempId = -Date.now();
+    const newPatient: Patient = {
+      ...(patientData as Patient),
+      id: tempId,
+      vitalSigns: patientData.vitalSigns || { bloodPressure: '', heartRate: 0, oxygenSaturation: 0 },
+      imagingResults: patientData.imagingResults || [],
+      notes: patientData.notes ?? '',
+    };
+    const prevPatients = get().patients;
+    set({ patients: [newPatient, ...prevPatients] });
+
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      const newPatient: Patient = {
-        ...patientData,
-        id: Math.max(...get().patients.map(p => p.id)) + 1,
-      };
-      
-      set(state => ({ 
-        patients: [...state.patients, newPatient],
-        loading: false 
-      }));
-      
-      return true;
-    } catch (error) {
-      set({ 
-        error: error instanceof Error ? error.message : 'Failed to add patient', 
-        loading: false 
+      const res = await patientsApi.addPatient(patientData as Parameters<typeof patientsApi.addPatient>[0]);
+      if (res.success && res.patientId) {
+        await get().fetchPatients();
+        set({ isMutating: false });
+        return true;
+      }
+      set({ patients: prevPatients, isMutating: false });
+      return false;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to add patient';
+      console.error('[patientStore] addPatient failed:', err);
+      set({
+        patients: prevPatients,
+        error: message,
+        isMutating: false,
       });
       return false;
     }
   },
 
   updateDiagnosisAndTreatment: async (id, diagnosis, treatment, tpaEligible) => {
-    set({ loading: true, error: null });
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      const updatedPatients = get().patients.map(patient => {
-        if (patient.id === id) {
-          return {
-            ...patient,
-            diagnosis,
-            treatment,
-            tpaEligible,
-            status: 'diagnosed',
-            notes: `${patient.notes}\n[${new Date().toISOString()}] Diagnosis and treatment plan added.`
-          };
-        }
-        return patient;
-      });
-      
-      set({ patients: updatedPatients, loading: false });
-      return true;
-    } catch (error) {
-      set({ 
-        error: error instanceof Error ? error.message : 'Failed to update diagnosis and treatment', 
-        loading: false 
-      });
-      return false;
-    }
+    return get().updatePatient(id, {
+      diagnosis,
+      treatment,
+      tpaEligible,
+      status: 'diagnosed',
+    });
   },
 
   makeTpaDecision: async (id, decision, reason) => {
-    set({ loading: true, error: null });
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      const updatedPatients = get().patients.map(patient => {
-        if (patient.id === id) {
-          return {
-            ...patient,
-            tpaDecision: decision,
-            tpaDecisionReason: reason,
-            status: decision === 'approved' ? 'treatment-approved' : 'treatment-denied',
-            notes: `${patient.notes}\n[${new Date().toISOString()}] tPA ${decision}: ${reason}`
-          };
-        }
-        return patient;
-      });
-      
-      set({ patients: updatedPatients, loading: false });
-      return true;
-    } catch (error) {
-      set({ 
-        error: error instanceof Error ? error.message : 'Failed to make tPA decision', 
-        loading: false 
-      });
-      return false;
-    }
-  }
+    return get().updatePatient(id, {
+      tpaDecision: decision,
+      tpaDecisionReason: reason,
+      status: decision === 'approved' ? 'treatment-approved' : 'treatment-denied',
+    });
+  },
 }));
+
+export type { Patient };

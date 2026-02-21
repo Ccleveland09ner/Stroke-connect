@@ -28,7 +28,7 @@ import { formatNIHSSScore, formatStatus } from '../utils/formatUtils';
 const PatientDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { patients, getPatientById, fetchPatients, updatePatient } = usePatientStore();
+  const { patients, myPatient, getPatientById, fetchPatients, fetchMyRecord, updatePatient, isMutating, error } = usePatientStore();
   const { role, user } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [patient, setPatient] = useState<any>(null);
@@ -41,17 +41,46 @@ const PatientDetail: React.FC = () => {
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      await fetchPatients();
-      const patientId = role === 'patient' ? 4 : parseInt(id || '0');
-      const patientData = getPatientById(patientId);
-      if (patientData) {
-        setPatient(patientData);
-        setFormData(patientData);
+      if (role === 'patient' && user?.name) {
+        await fetchMyRecord(user.name);
+        const patientData = usePatientStore.getState().myPatient;
+        if (patientData) {
+          setPatient(patientData);
+          setFormData(patientData);
+        }
+      } else {
+        await fetchPatients();
+        const patientId = parseInt(id || '0');
+        const patientData = getPatientById(patientId);
+        if (patientData) {
+          setPatient(patientData);
+          setFormData(patientData);
+        }
       }
       setLoading(false);
     };
     loadData();
-  }, [id, fetchPatients, getPatientById, role]);
+  }, [id, fetchPatients, fetchMyRecord, getPatientById, role, user?.name]);
+
+  const refreshPatient = () => {
+    if (role === 'patient' && user?.name) {
+      fetchMyRecord(user.name).then(() => {
+        const p = usePatientStore.getState().myPatient;
+        if (p) {
+          setPatient(p);
+          setFormData(p);
+        }
+      });
+    } else if (patient) {
+      fetchPatients().then(() => {
+        const p = getPatientById(patient.id);
+        if (p) {
+          setPatient(p);
+          setFormData(p);
+        }
+      });
+    }
+  };
 
   const handleDiagnosisSubmit = async (diagnosis: string, treatment: string, tpaEligible: boolean) => {
     if (patient) {
@@ -63,8 +92,7 @@ const PatientDetail: React.FC = () => {
       });
       setShowDiagnosisForm(false);
       setShowTPAForm(true);
-      const updatedPatient = getPatientById(patient.id);
-      setPatient(updatedPatient);
+      refreshPatient();
     }
   };
 
@@ -76,8 +104,7 @@ const PatientDetail: React.FC = () => {
         tpaDecisionReason: reason
       });
       setShowTPAForm(false);
-      const updatedPatient = getPatientById(patient.id);
-      setPatient(updatedPatient);
+      refreshPatient();
     }
   };
 
@@ -85,8 +112,7 @@ const PatientDetail: React.FC = () => {
     if (patient) {
       await updatePatient(patient.id, { nihssScore: score });
       setShowNIHSSCalculator(false);
-      const updatedPatient = getPatientById(patient.id);
-      setPatient(updatedPatient);
+      refreshPatient();
     }
   };
 
@@ -116,9 +142,7 @@ const PatientDetail: React.FC = () => {
         status: 'treatment-approved',
         notes: patient.notes + '\nPatient approved for tPA treatment.'
       });
-      
-      const updatedPatient = getPatientById(patient.id);
-      setPatient(updatedPatient);
+      refreshPatient();
     }
   };
   
@@ -128,18 +152,14 @@ const PatientDetail: React.FC = () => {
         status: 'treatment-denied',
         notes: patient.notes + '\nPatient not eligible for tPA treatment.'
       });
-      
-      const updatedPatient = getPatientById(patient.id);
-      setPatient(updatedPatient);
+      refreshPatient();
     }
   };
   
   const handleSaveChanges = async () => {
     if (patient) {
       await updatePatient(patient.id, formData);
-      
-      const updatedPatient = getPatientById(patient.id);
-      setPatient(updatedPatient);
+      refreshPatient();
       setIsEditing(false);
     }
   };
@@ -177,6 +197,11 @@ const PatientDetail: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {error && (
+        <Alert variant="error" title="Error">
+          {error}
+        </Alert>
+      )}
       {/* Header section */}
       <div className="flex flex-wrap items-center justify-between">
         <div className="flex items-center">
@@ -196,16 +221,16 @@ const PatientDetail: React.FC = () => {
         {canEdit && (
           <div>
             {!isEditing ? (
-              <Button onClick={() => setIsEditing(true)}>
+              <Button onClick={() => setIsEditing(true)} disabled={isMutating}>
                 <Edit className="h-4 w-4 mr-2" />
                 Edit Patient
               </Button>
             ) : (
               <div className="space-x-2">
-                <Button variant="outline" onClick={() => setIsEditing(false)}>
+                <Button variant="outline" onClick={() => setIsEditing(false)} disabled={isMutating}>
                   Cancel
                 </Button>
-                <Button onClick={handleSaveChanges}>
+                <Button onClick={handleSaveChanges} isLoading={isMutating} disabled={isMutating}>
                   Save Changes
                 </Button>
               </div>
@@ -243,6 +268,8 @@ const PatientDetail: React.FC = () => {
                 <Button 
                   variant="danger" 
                   onClick={handleDenyTPa}
+                  isLoading={isMutating}
+                  disabled={isMutating}
                 >
                   <XCircle className="h-4 w-4 mr-2" />
                   Deny tPA
@@ -250,6 +277,8 @@ const PatientDetail: React.FC = () => {
                 <Button 
                   variant="success"
                   onClick={handleApproveTPa}
+                  isLoading={isMutating}
+                  disabled={isMutating}
                 >
                   <CheckCircle className="h-4 w-4 mr-2" />
                   Approve tPA
@@ -282,7 +311,7 @@ const PatientDetail: React.FC = () => {
               ) : (
                 <div className="text-center py-6">
                   <p className="text-sm text-gray-500 mb-4">No diagnosis or treatment plan has been added yet.</p>
-                  <Button onClick={() => setShowDiagnosisForm(true)}>
+                  <Button onClick={() => setShowDiagnosisForm(true)} disabled={isMutating}>
                     <Plus className="h-4 w-4 mr-2" />
                     Add Diagnosis & Treatment
                   </Button>
@@ -314,7 +343,7 @@ const PatientDetail: React.FC = () => {
               ) : patient.diagnosis ? (
                 <div className="text-center py-6">
                   <p className="text-sm text-gray-500 mb-4">tPA decision pending.</p>
-                  <Button onClick={() => setShowTPAForm(true)}>
+                  <Button onClick={() => setShowTPAForm(true)} disabled={isMutating}>
                     Make tPA Decision
                   </Button>
                 </div>
@@ -336,7 +365,7 @@ const PatientDetail: React.FC = () => {
           <CardHeader className="bg-gray-50 border-b">
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-medium text-gray-900">NIHSS Score</h3>
-              <Button onClick={() => setShowNIHSSCalculator(true)}>
+              <Button onClick={() => setShowNIHSSCalculator(true)} disabled={isMutating}>
                 Calculate NIHSS Score
               </Button>
             </div>

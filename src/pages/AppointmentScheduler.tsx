@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Calendar, Clock, User, Plus } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
+import Alert from '../components/ui/Alert';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import { useAppointmentStore } from '../stores/appointmentStore';
@@ -8,7 +9,7 @@ import { usePatientStore } from '../stores/patientStore';
 import { format, parseISO, isToday, isTomorrow } from 'date-fns';
 
 const AppointmentScheduler: React.FC = () => {
-  const { appointments, fetchAppointments, addAppointment, updateAppointment, cancelAppointment } = useAppointmentStore();
+  const { appointments, fetchAppointments, addAppointment, updateAppointment, cancelAppointment, isMutating, mutatingId, error } = useAppointmentStore();
   const { patients, fetchPatients } = usePatientStore();
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -106,6 +107,11 @@ const AppointmentScheduler: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {error && (
+        <Alert variant="error" title="Error">
+          {error}
+        </Alert>
+      )}
       <div className="flex flex-wrap items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Appointment Scheduler</h1>
         <Button onClick={() => setShowAddForm(!showAddForm)}>
@@ -201,7 +207,7 @@ const AppointmentScheduler: React.FC = () => {
               </div>
 
               <div className="flex justify-end">
-                <Button type="submit">
+                <Button type="submit" isLoading={isMutating} disabled={isMutating}>
                   Schedule Appointment
                 </Button>
               </div>
@@ -251,6 +257,7 @@ const AppointmentScheduler: React.FC = () => {
                             appointment={appointment}
                             onCancel={() => handleCancel(appointment.id)}
                             onComplete={() => handleComplete(appointment.id)}
+                            isMutating={mutatingId === appointment.id}
                           />
                         ))
                       }
@@ -279,12 +286,14 @@ interface AppointmentItemProps {
   };
   onCancel: () => void;
   onComplete: () => void;
+  isMutating?: boolean;
 }
 
 const AppointmentItem: React.FC<AppointmentItemProps> = ({ 
   appointment, 
   onCancel,
-  onComplete
+  onComplete,
+  isMutating = false
 }) => {
   const { date, time, patientName, type, status, notes } = appointment;
   
@@ -339,6 +348,8 @@ const AppointmentItem: React.FC<AppointmentItemProps> = ({
               variant="outline" 
               size="sm"
               onClick={onCancel}
+              disabled={isMutating}
+              isLoading={isMutating}
             >
               Cancel
             </Button>
@@ -346,6 +357,8 @@ const AppointmentItem: React.FC<AppointmentItemProps> = ({
               variant="success" 
               size="sm"
               onClick={onComplete}
+              disabled={isMutating}
+              isLoading={isMutating}
             >
               Complete
             </Button>
